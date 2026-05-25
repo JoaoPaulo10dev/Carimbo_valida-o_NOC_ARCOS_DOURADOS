@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Filtro de Justificativas Técnicas</title>
+  <style>
+        :root {
+            --primary: #0078d4;
+            --bg: #f3f2f1;
+            --text: #323130;
+            --mcd-red: #DA291C;
+            --mcd-yellow: #FFC72C;
+            --mcd-gradient: linear-gradient(90deg, var(--mcd-red), var(--mcd-yellow));
+        }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            border: 3px solid transparent;
+            border-image: var(--mcd-gradient) 1;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* Busca */
+        #busca {
+            box-sizing: border-box;
+            display: block;
+            width: calc(100% - 12px);
+            margin: 0 auto 16px;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid var(--mcd-yellow);
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        #busca:focus { border-color: var(--mcd-red); box-shadow: 0 0 0 3px rgba(218,41,28,0.15); }
+
+        /* Filtros por Categoria */
+        .filtros-categoria { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        .filtro-btn {
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border: 1.5px solid #ddd;
+            background: white;
+            color: var(--text);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+        .filtro-btn:hover { border-color: var(--mcd-red); color: var(--mcd-red); }
+        .filtro-btn.ativo {
+            background: var(--mcd-red);
+            border-color: var(--mcd-red);
+            color: white;
+            box-shadow: 0 2px 6px rgba(218,41,28,0.25);
+        }
+
+        /* Estrutura de Listagem */
+        .sessao-header {
+            background: var(--mcd-gradient);
+            color: #111;
+            padding: 10px 15px;
+            margin-top: 25px;
+            border-radius: 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+        .categoria-label { display: block; color: var(--mcd-red); font-weight: bold; margin: 15px 0 5px 5px; font-size: 0.9rem; border-left: 3px solid var(--mcd-yellow); padding-left: 10px; }
+        
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: 0.2s; position: relative; font-size: 0.95rem; }
+        li:hover { background: #f0f7ff; color: var(--primary); }
+        li:active { background: #c7e0f4; }
+        
+        .hidden { display: none !important; }
+
+        /* Aviso de Copiado (Toast) */
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 5px; padding: 16px; position: fixed; z-index: 1; bottom: 30px; left: 50%; transform: translateX(-50%); font-weight: bold; }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 1.5s; }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <input
+      type="text"
+      id="busca"
+      placeholder="Digite para buscar (ex: Meraki, Energia, Troca)..."
+      onkeyup="filtrar()"
+    />
+    <div id="filtros-categoria" class="filtros-categoria"></div>
+    <div id="lista-container"></div>
+  </div>
+
+  <div id="toast">Copiado</div>
+
+  <script>
+const baseDeDados = [
+    {
+        sessao: "CAUSA CLIENTE",
+        categorias: [
+            {
+                nome: "ACESSO",
+                frases: [
+                    "FORA DE EXPEDIENTE - Ambiente normalizado após religue dos equipamentos no inicio de expediente no local.",
+                    "FORA DE EXPEDIENTE - Local sem expediente aos finais de semanas e feriados",
+                    "RESTRICAO DE ACESSO - Sem acesso ao devido restrição de acesso",
+                    "RESTRICAO DE ACESSO - Local desativado"
+                ]
+            },
+            {
+                nome: "CLIENTE ENERGIA ELÉTRICA",
+                frases: [
+                    "BAIXA/ALTA TENSAO - Ambiente normalizado após correção na rede elétrica",
+
+		            "EQUIPAMENTO DESLIGADO - Ambiente normalizado após troca do rack desligado",
+	                "EQUIPAMENTO DESLIGADO - Ambiente normalizado após manutenção do rack desligado",
+                    "EQUIPAMENTO DESLIGADO - Ambiente normalizado após religue do modem da operadora",
+		            "EQUIPAMENTO DESLIGADO - Ambiente normalizado após religue do router",
+                    "EQUIPAMENTO DESLIGADO - Ambiente normalizado após religue do MERAKI",
+		            "EQUIPAMENTO DESLIGADO - Ambiente normalizado após religue do Switch",
+                    "EQUIPAMENTO DESLIGADO - Ambiente normalizado após religue do modem intelbras",
+
+		            "FALTA DE ENERGIA - Ambiente operacional após retorno de energia elétrica.",
+                    "FALTA DE ENERGIA - Ambiente operacional após INCÊNDIO NO TRANSFORMADOR DA CONCESSIONÁRIA",
+                    "FALTA DE ENERGIA - Ambiente operacional após manutenção no quadro elétrico",
+                ]
+            },
+
+            {
+                nome: "COMERCIAL",
+                frases: [
+                    "PENDENCIA COMERCIAL - Link cancelado, acionado SM sendo tratado junto ao comercial",
+                    "PENDENCIA COMERCIAL - AMBOS OS LINKS DA MESMA OPERADORA  - PENDLINK - Ambiente normalizado após religue de confiança",
+                    "PENDENCIA COMERCIAL - PENDLINK - Ambiente normalizado após religue de confiança junto a operadora",
+                ]
+            },
+            {
+                nome: "CONSUMO",
+                frases: [
+                    "ALTA UTILIZAÇÃO - Ambiente degradado devido consumo / alta utilização",
+                    "FRANQUIA EXCEDIDA - Ambiente degradado devido franquia excedida, restabelecido após a renovação da franquia",
+                ]
+            },
+            {
+                nome: "INFRAESTRUTURA",
+                frases: [
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre router e modem operadora",
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre MERAKI e modem operadora",
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre Switch e o AP",
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre Meraki e o AP",
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre router e INFRAESTRUTURA",
+                    "CABEAMENTO DANIFICADO - Ambiente normalizado após troca de cabeamento danificado entre MERAKI e INFRAESTRUTURA",
+
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento no router devido mau contato",
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento no MERAKI devido mau contato",
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento no Switch devido mau contato",
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento no MODEM 5G devido mau contato",
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento entre MERAKI e AP devido mau contato",
+                    "CABEAMENTO DESCONECTADO - Ambiente normalizado após refazer as conexões do cabeamento entre Switch e AP devido mau contato",
+
+                    "CABEAMENTO INCORRETO - Ambiente normalizado após refazer as conexões do cabeamento na porta correta no router",
+                    "CABEAMENTO INCORRETO - Ambiente normalizado após refazer as conexões do cabeamento na porta correta no MERAKI",
+                    "CABEAMENTO INCORRETO - Ambiente normalizado após refazer as conexões do cabeamento na porta correta do modem 4G",
+                    "CABEAMENTO INCORRETO - Ambiente normalizado após refazer as conexões do cabeamento na porta correta no Switch",
+                    "CABEAMENTO INCORRETO - Ambiente normalizado após refazer as conexões do AP na porta correta no Switch",
+
+                    "VANDALISMO - Local fechado devido vandalismo, sem previsão, notificado TIMCD",
+                    "REFRIGERACAO - Ambiente normalizado (Descrever o que efetuou para normalizar), porem necessário verificar a refrigeração do equipamentos, notificado TIMCD",
+                    "REFORMA - Ambiente normalizado após termino de reforma",
+                    "REFORMA - Local fechado devido a reformas",
+                    "INSTALACOES INADEQUADAS - Ambiente normalizado (Descrever o que efetuou para normalizar), porem instalações inadequadas, notificado TIMCD",
+
+                ]
+            },
+        ]
+    },
+    {
+        sessao: "EQUIPAMENTO",
+        categorias: [
+            {
+                nome: "DIVERSOS",
+                frases: [
+                    "CONFIGURAÇÃO - Ambiente normalizado após configuração do ROUTER",
+                    "CONFIGURAÇÃO - Ambiente normalizado após configuração do SWITCH",
+                    "CONFIGURAÇÃO - Ambiente normalizado após recuperar a gerencia do ROUTER",
+                    "CONFIGURAÇÃO - Ambiente normalizado após recuperar a gerencia do SWITCH",
+                    "CONFIGURAÇÃO - Ambiente normalizado após configuração do FIREWALL",
+                    "CONFIGURACAO WI-FI - Ambiente normalizado após configuração do WI-FI",
+                    "RESET - Ambiente normalizado após reset no ROUTER travado",
+                    "RESET - Ambiente normalizado após reset SWITCH travado",
+                    "RESET - Ambiente normalizado após reset SWITCHs e ROUTER travado travados",
+                    "RESET -  MODEM 5G - Ambiente normalizado após reset no modem 5G",
+
+                    "TROCA - Ambiente normalizado após troca de ROUTER devido equipamento danificado",
+                    "TROCA - Ambiente normalizado após troca de SWITCH devido equipamento danificado",
+                    "TROCA - Ambiente normalizado após troca de MODEM INTELBRAS devido equipamento danificado",
+                    "TROCA - Ambiente normalizado após troca da fonte do Switch devido a mau uso",
+                    "FIRMWARE - Falha massiva no ambiente do cliente, ambiente normalizado após recuperar comunicação com o FIRMWARE",
+                    ]
+            },
+            {
+                nome: "SDWAN",
+                frases: [
+                        "CONFIGURACOES AP - Ambiente normalizado após configurações no AP",
+                        "CONFIGURACOES ROTEADOR - Ambiente normalizado após configurações no Meraki",
+                        "CONFIGURACOES SWITCH - Ambiente normalizado após configurações no SWITCH",
+                        "CONFIGURACOES WI-FI - Ambiente normalizado após configurações no WI-FI",
+                        "FIRMWARE SDWAN - Ambiente normalizado após atuação no FIRMWARE SDWAN",
+                        "INTERFACE SWITCH - Ambiente normalizado após troca de equipamento devido falha na INTERFACE DO SWITCH",
+                        "INTERFACE ROUTER - Ambiente normalizado após troca de equipamento devido falha na INTERFACE DO MERAKI",
+                        "INTERFACE DO SWITCH - Ambiente normalizado após correção da INTERFACE DO SWITCH",
+                        "INTERFACE DO SDWAN - Ambiente normalizado após correção da INTERFACE DO MERAKI",
+                        "RESET AP - Ambiente normalizado reinicialização dos AP travado",
+                        "RESET ROUTER  - Ambiente normalizado reinicialização do MERAKI travado",
+                        "RESET ROUTER  - Ambiente normalizado reinicialização do MERAKI devido VPN down",
+                        "RESET DE SDWAN - Ambiente normalizado reinicialização do SWITCH travado",
+                        "TROCA DE AP - Ambiente normalizado após troca de AP devido equipamento danificado",
+                        "TROCA DE SDWAN - Ambiente normalizado após troca de MERAKI devido equipamento danificado",
+                        "TROCA DE SDWAN - Ambiente normalizado após troca de SWITCH devido equipamento danificado",
+                        "TROCA AP - Ambiente normalizado após troca de AP devido equipamento danificado",
+                        "TROCA AP - ANTENA - Ambiente normalizado após troca da antena devido equipamento danificado",
+                        "TROCA AP - FONTE - Ambiente normalizado após troca da fonte do AP devido equipamento danificado",
+                        "TROCA ROUTER - Ambiente normalizado após troca de MERAKI devido equipamento danificado",
+                        "TROCA ROUTER - FONTE - Ambiente normalizado após troca da fonte danificada",
+                        "TROCA SWITCH - Ambiente normalizado após troca de SWITCH devido equipamento danificado",
+                        ]
+            },
+            {
+                nome: "MAU USO",
+                frases: [
+                        "TROCA DE AP - Ambiente normalizado após troca de AP devido a mau uso",
+                        "TROCA DE AP - Ambiente normalizado após troca de AP devido infiltração site cliente",
+                        "TROCA DE ANTENA - Ambiente normalizado após troca de Antena devido a mau uso",
+                        "TROCA DE SDWAN - Ambiente normalizado após troca de MERAKI devido a mau uso",
+                        "TROCA DE SDWAN - Ambiente normalizado após troca de Switch devido a mau uso",
+                        ]
+            },
+            {
+                 nome:"IMPROCEDENTE",
+                frases: [
+                        "Utilizar em casos que o Cliente abri r de forma indevida ou duplicada",
+                        "ABERTO EM DUPLICIDADE - Ambiente normalizado após abertura indevida ou duplicada",
+                        "ABERTURA INDEVIDA - Ambiente normalizado após abertura indevida",
+                        "ALARME FALSO NA GERENCIA - Ambiente normalizado após alarme falso na gerencia",
+                        ]
+            },
+            {
+                nome:"CLIENTE",
+                frases: [
+                "ABERTO EM DUPLICIDADE",
+                "ABERTURA INDEVIDA",
+                "FORA DO ESCOPO",
+                "NAO IDENTIFICADO FALHA",
+                ]
+            },
+        ],
+    },
+    {
+        sessao: "OPERADORA",
+        categorias: [
+            {
+                nome: "TERCEIRA",
+                frases: [
+                    "CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "CPE - CABEAMENTO - Ambiente normalizado após passagem de cabo no site cliente",
+                    "FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "MOVEL - CHIP - Ambiente normalizado após retorno da analise de chip",
+                    "MOVEL - CHIP - Ambiente normalizado após troca de chip danificado",
+                    "MOVEL - CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "MOVEL - CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "MOVEL - MODEM - Ambiente normalizado após reset no modem",
+                    "MOVEL - MODEM - Ambiente normalizado após troca do modem",
+                    "REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                    ]
+
+            },
+            {
+                nome: "VIVO",
+                frases: [
+                    "CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "PE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada na central da operadora",
+                    "CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "CPE CABEAMENTO - Ambiente normalizado após passagem do cabeamento no site cliente",
+                    "CPE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada no site cliente",
+                    "ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "MOVEL - SIM CARD ATUALIZADO - Ambiente normalizado após retorno da analise de chip",
+                    "MOVEL - SIM CARD DESASSOCIADO - Ambiente normalizado após associação do chip",
+                    "MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip danificado",
+                    "MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "MOVEL - TROCA DE CPE - Ambiente normalizado após troca do modem",
+                    "REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                ]
+            },
+            {
+                nome: "AMBOS OS LINKS OPERADORA VIVO",
+                frases: [
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE CABEAMENTO - Ambiente normalizado após passagem do cabeamento no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - SIM CARD ATUALIZADO - Ambiente normalizado após retorno da analise de chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - SIM CARD DESASSOCIADO - Ambiente normalizado após associação do chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip danificado",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CPE - Ambiente normalizado após troca do modem",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                ]
+            },
+            {
+                nome: "AMBOS OS LINKS OPERADORA TERCEIRA",
+                frases: [
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - PE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada na central da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE CABEAMENTO - Ambiente normalizado após passagem do cabeamento no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - CPE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada no site cliente",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - SIM CARD ATUALIZADO - Ambiente normalizado após retorno da analise de chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - SIM CARD DESASSOCIADO - Ambiente normalizado após associação do chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip danificado",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - MOVEL - TROCA DE CPE - Ambiente normalizado após troca do modem",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "AMBOS OS LINKS DA MESMA OPERADORA  - VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                ]
+            },
+            {
+                nome: "APENAS UM LINK TERCEIRA",
+                frases: [
+                    "POSSUI APENAS UM LINK  - CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "POSSUI APENAS UM LINK  - CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "POSSUI APENAS UM LINK  - PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE - CABEAMENTO - Ambiente normalizado após passagem do cabeamento no site cliente",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "POSSUI APENAS UM LINK  - ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "POSSUI APENAS UM LINK  - MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "POSSUI APENAS UM LINK  - MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "POSSUI APENAS UM LINK  - MOVEL - CHIP - Ambiente normalizado após retorno da analise de chip",
+                    "POSSUI APENAS UM LINK  - MOVEL - CHIP - Ambiente normalizado após troca de chip danificado",
+                    "POSSUI APENAS UM LINK  - MOVEL - CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "POSSUI APENAS UM LINK  - MOVEL - CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "POSSUI APENAS UM LINK  - MOVEL - MODEM - Ambiente normalizado após reset no modem",
+                    "POSSUI APENAS UM LINK  - MOVEL - MODEM - Ambiente normalizado após troca do modem",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "POSSUI APENAS UM LINK  - VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                ]
+            },
+            {
+                nome: "APENAS UM LINK VIVO",
+                frases: [
+                    "POSSUI APENAS UM LINK  - CONFIGURACOES BACKBONE - Ambiente normalizado após configurações no backbone",
+                    "POSSUI APENAS UM LINK  - CONFIGURACOES REDE DE ACESSO - Ambiente normalizado após configurações Rede de acesso",
+                    "POSSUI APENAS UM LINK  - PE TROCA - Ambiente normalizado após troca de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE RESET - Ambiente normalizado após reset de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE CABEAMENTO - Ambiente normalizado após passagem do cabeamento na central da operadora",
+                    "POSSUI APENAS UM LINK  - PE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada na central da operadora",
+                    "POSSUI APENAS UM LINK  - CPE TROCA - Ambiente normalizado após troca de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE RESET - Ambiente normalizado após reset de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE CONFIGURAÇÃO - Ambiente normalizado após configuração de equipamento operadora no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE CABEAMENTO - Ambiente normalizado após passagem do cabeamento no site cliente",
+                    "POSSUI APENAS UM LINK  - CPE TROCA DA FONTE - Ambiente normalizado após troca da fonte danificada no site cliente",
+                    "POSSUI APENAS UM LINK  - ENERGIA ELETRICA - FALTA DE ENERGIA NA CENTRAL - Ambiente normalizado após retorno de energia na central",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede externa",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - Ambiente normalizado após passagem de cabo na rede subterranea",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após fusão de fibra",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - REDE IP/METRO Ambiente normalizado após recuperar REDE IP/METRO",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - VANDALISMO - Ambiente normalizado após troca de cabeamento e fusão de fibra",
+                    "POSSUI APENAS UM LINK  - FALHA MASSIVA - VANDALISMO ARMARIO - Ambiente normalizado após substituição do Armario",
+                    "POSSUI APENAS UM LINK  - MELHORIA DE REDE - - Ambiente normalizado após melhoria de rede",
+                    "POSSUI APENAS UM LINK  - MOVEL - AJUSTE DE SINAL - Ambiente normalizado após ajuste de sinal",
+                    "POSSUI APENAS UM LINK  - MOVEL - SIM CARD ATUALIZADO - Ambiente normalizado após retorno da analise de chip",
+                    "POSSUI APENAS UM LINK  - MOVEL - SIM CARD DESASSOCIADO - Ambiente normalizado após associação do chip",
+                    "POSSUI APENAS UM LINK  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip danificado",
+                    "POSSUI APENAS UM LINK  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip extraviado",
+                    "POSSUI APENAS UM LINK  - MOVEL - TROCA DE CHIP - Ambiente normalizado após troca de chip devido erro de leitura do chip",
+                    "POSSUI APENAS UM LINK  - MOVEL - TROCA DE CPE - Ambiente normalizado após troca do modem",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - ROMPIMENTO DE FIBRA - Ambiente normalizado após troca de cabeamento na rede externa",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - ROMPIMENTO NA REDE SUBTERRANEA - Ambiente normalizado após reparo na rede subterrânea",
+                    "POSSUI APENAS UM LINK  - REDE EXTERNA - Ambiente normalizado após oscilação na rede da operadora",
+                    "POSSUI APENAS UM LINK  - VANDALISMO - Ambiente normalizado após instalação de caixa de emenda e fusão fibra na rede externa",
+                ]
+            }
+        ]
+    },
+
+]
+
+let categoriaAtiva = 'TODOS';
+
+// Gera a interface
+function renderizar() {
+    const container = document.getElementById('lista-container');
+    container.innerHTML = baseDeDados.map(s => `
+        <div class="sessao-bloco">
+            <div class="sessao-header">${s.sessao}</div>
+            ${s.categorias.map(c => `
+                <div class="categoria-bloco" data-categoria="${c.nome.toUpperCase()}">
+                    <span class="categoria-label">${c.nome}</span>
+                    <ul>
+                        ${c.frases.map(f => `<li onclick="copiar(this)">${f}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('')}
+        </div>
+    `).join('');
+}
+
+// Gera os botões de filtro por categoria
+function renderizarFiltros() {
+    const nomes = [...new Set(
+        baseDeDados.flatMap(s => s.categorias.map(c => c.nome.toUpperCase()))
+    )];
+    const container = document.getElementById('filtros-categoria');
+    container.innerHTML = `
+        <button class="filtro-btn ativo" data-cat="TODOS" onclick="selecionarCategoria(this)">Todos</button>
+        ${nomes.map(n => `<button class="filtro-btn" data-cat="${n}" onclick="selecionarCategoria(this)">${n}</button>`).join('')}
+    `;
+}
+
+function selecionarCategoria(btn) {
+    document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    categoriaAtiva = btn.dataset.cat;
+    filtrar();
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+// Filtro inteligente
+function filtrar() {
+    const termo = document.getElementById('busca').value.trim();
+    const regex = termo ? new RegExp(escapeRegex(termo), 'i') : null;
+
+    document.querySelectorAll('.categoria-bloco').forEach(bloco => {
+        const categoriaBate = categoriaAtiva === 'TODOS'
+            || bloco.dataset.categoria === categoriaAtiva;
+
+        if (!categoriaBate) {
+            bloco.classList.add('hidden');
+            return;
+        }
+
+        const itens = bloco.querySelectorAll('li');
+        itens.forEach(li => {
+            const visivel = !regex || regex.test(li.textContent);
+            li.classList.toggle('hidden', !visivel);
+        });
+
+        const temVisivel = bloco.querySelectorAll('li:not(.hidden)').length > 0;
+        bloco.classList.toggle('hidden', !temVisivel);
+    });
+
+    // Esconde sessões inteiras quando todas as categorias filhas estão ocultas
+    document.querySelectorAll('.sessao-bloco').forEach(sessao => {
+        const algumaVisivel = sessao.querySelectorAll('.categoria-bloco:not(.hidden)').length > 0;
+        sessao.classList.toggle('hidden', !algumaVisivel);
+    });
+}
+// Função de Copiar
+function copiar(elemento) {
+    const texto = elemento.innerText;
+    navigator.clipboard.writeText(texto).then(() => {
+        const toast = document.getElementById("toast");
+        toast.className = "show";
+        setTimeout(() => { toast.className = ""; }, 2000);
+    });
+}
+
+renderizar();
+renderizarFiltros();
+  </script>
+</body>
+</html>
