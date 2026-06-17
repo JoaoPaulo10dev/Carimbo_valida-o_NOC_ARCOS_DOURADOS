@@ -1,5 +1,5 @@
 <img width="835" height="213" alt="image" src="https://github.com/user-attachments/assets/279eec64-b69a-4cb0-826c-23dfc5a3b07c" />
-- primeira imagem demonstra os botoões de filtros para facilitar a resolutividade
+- primeira imagem demonstra os botões de filtros para facilitar a resolutividade
 
 
 <img width="896" height="632" alt="image" src="https://github.com/user-attachments/assets/c5d7e684-ff1a-4340-815b-728f04067ccd" />
